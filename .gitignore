@@ -49,3 +49,5 @@ web/update.php
 web/web.config
 
 .history
+.env
+
