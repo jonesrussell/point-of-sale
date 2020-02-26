@@ -1,0 +1,130 @@
+version: "3"
+services:
+  app:
+    image: vessel/drupalapp
+    ports:
+      - "${CMS_PORT}:80"
+    networks:
+      - vessel
+    build:
+      context: ./docker/drupalapp
+      dockerfile: Dockerfile
+    environment:
+      CONTAINER_ENV: "${CMS_ENV}"
+      XDEBUG_HOST: "${XDEBUG_HOST}"
+      WWWUSER: "${WWWUSER}"
+      CMS_KEY: "${CMS_KEY}"
+      DB_CONNECTION: "${DB_CONNECTION}"
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      DB_DATABASE: "${DB_DATABASE}"
+      DB_USERNAME: "${DB_USERNAME}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      REDIS_INTERFACE: "${REDIS_INTERFACE}"
+      REDIS_HOST: "${REDIS_HOST}"
+      REDIS_AUTH: "${REDIS_AUTH}"
+      REDIS_BASE: "${REDIS_BASE}"
+      MINIO_PORT: "${MINIO_PORT}"
+      MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY}"
+      MINIO_SECRET_KEY: "${MINIO_SECRET_KEY}"
+      MINIO_REGION: "${MINIO_REGION}"
+      MINIO_BUCKET: "${MINIO_BUCKET}"
+      MINIO_ENDPOINT: "${MINIO_ENDPOINT}"
+      MINIO_PREFIX: "${MINIO_PREFIX}"
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - mysql
+      - redis
+      - minio
+
+  node:
+    build:
+      context: ./docker/node
+      dockerfile: Dockerfile
+      args:
+        uid: "${WWWUSER}"
+    image: vessel/node
+    user: node
+    volumes:
+      - .:/var/www/html
+    networks:
+      - vessel
+
+  mysql:
+    image: mysql:5.7
+    ports:
+      - "${MYSQL_PORT}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_DATABASE: "${DB_DATABASE}"
+      MYSQL_USER: "${DB_USERNAME}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    volumes:
+      - vesselmysql:/var/lib/mysql
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d
+      - ./docker/mysql/logs:/var/log/mysql:rw
+      - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql
+    networks:
+      - vessel
+        
+  redis:
+    image: redis:alpine
+    volumes:
+      - vesselredis:/data
+    networks:
+      - vessel
+      - messages
+    ports:
+      - "${REDIS_PUBLIC_PORT}:6379"
+
+  datadog:
+    links: # Connect the Datadog Agent container to service containers 
+     - redis
+     - mysql
+     - minio
+     - app
+    image: datadog/agent:latest
+    environment:
+     - "DD_API_KEY=${DD_API_KEY}"
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+     - /proc/:/host/proc/:ro
+     - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
+    depends_on:
+      - app
+      - mysql
+      - redis
+      - minio
+
+  minio:
+    image: minio/minio:edge
+    # container_name: minio
+    # hostname: minio
+    ports:
+      - "${MINIO_PORT}:9000"
+    volumes:
+      - vesselminio:/data
+    environment:
+      - "MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}"
+      - "MINIO_SECRET_KEY=${MINIO_SECRET_KEY}"
+      - "MINIO_REGION=${MINIO_REGION}"
+    command: server /data
+    networks:
+      - vessel
+
+networks:
+  vessel:
+    driver: "bridge"
+  messages:
+    driver: "bridge"
+
+volumes:
+  vesselmysql:
+    driver: "local"
+  vesselredis:
+    driver: "local"
+  vesselminio:
+    driver: "local"
+
