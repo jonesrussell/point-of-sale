@@ -65,7 +65,7 @@ services:
       - vesselmysql:/var/lib/mysql
       - ./docker/mysql/conf.d:/etc/mysql/conf.d
       - ./docker/mysql/logs:/var/log/mysql:rw
-      - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql
+      # - ./dump.sql:/docker-entrypoint-initdb.d/dump.sql
     networks:
       - vessel
         
@@ -113,6 +113,14 @@ services:
     command: server /data
     networks:
       - vessel
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+     - "${MAILHOG_SMTP}:${MAIL_PORT}"
+     - "${MAILHOG_WWW}:8025"
+    networks:
+     - vessel
 
 networks:
   vessel:
