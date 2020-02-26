@@ -2,7 +2,11 @@ FROM ubuntu:18.04
 
 LABEL maintainer="Chris Fidao"
 
-RUN useradd -ms /bin/bash -u 1337 vessel
+ARG USERNAME=vessel
+ARG USER_UID=1000
+ARG USER_GID=1337
+
+RUN useradd -ms /bin/bash -u ${USER_GID} ${USERNAME}
 WORKDIR /var/www/html
 
 ENV TZ=UTC
@@ -17,7 +21,7 @@ RUN echo "deb http://ppa.launchpad.net/ondrej/php/ubuntu bionic main" > /etc/apt
   && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys E5267A6C \
   && apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C300EE8C \
   && apt-get update \
-  && apt-get install -y curl zip unzip git supervisor sqlite3 \
+  && apt-get install -y curl zip unzip git supervisor sqlite3 zsh \
   && apt-get install -y nginx php7.3-fpm php7.3-cli \
   php7.3-pgsql php7.3-sqlite3 php7.3-gd \
   php7.3-curl php7.3-memcached \
@@ -37,21 +41,42 @@ RUN echo "deb http://ppa.launchpad.net/ondrej/php/ubuntu bionic main" > /etc/apt
   && sed -i "s/pm\.max_spare_servers = .*/pm.max_spare_servers = 10/" /etc/php/7.3/fpm/pool.d/www.conf \
   && echo "daemon off;" >> /etc/nginx/nginx.conf
 
+RUN apt-get update \
+  #
+  # Install Docker CE CLI
+  && apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common lsb-release \
+  && curl -fsSL https://download.docker.com/linux/$(lsb_release -is | tr '[:upper:]' '[:lower:]')/gpg | apt-key add - 2>/dev/null \
+  && add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/$(lsb_release -is | tr '[:upper:]' '[:lower:]') $(lsb_release -cs) stable" \
+  && apt-get update \
+  && apt-get install -y docker-ce-cli \
+  #
+  # Install Docker Compose
+  && curl -sSL "https://github.com/docker/compose/releases/download/1.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose \
+  && chmod +x /usr/local/bin/docker-compose
+
 COPY --from=drush/drush /usr/local/bin/drush /usr/local/bin/drush
 
 RUN ln -sf /dev/stdout /var/log/nginx/access.log \
   && ln -sf /dev/stderr /var/log/nginx/error.log
 
-COPY h5bp /etc/nginx/h5bp
-COPY default /etc/nginx/sites-available/default
-COPY php-fpm.conf /etc/php/7.3/fpm/php-fpm.conf
-COPY xdebug.ini /etc/php/7.3/mods-available/xdebug.ini
-COPY vessel.ini /etc/php/7.3/fpm/conf.d/99-vessel.ini
+# COPY h5bp /etc/nginx/h5bp
+# COPY default /etc/nginx/sites-available/default
+# COPY php-fpm.conf /etc/php/7.3/fpm/php-fpm.conf
+# COPY xdebug.ini /etc/php/7.3/mods-available/xdebug.ini
+# COPY vessel.ini /etc/php/7.3/fpm/conf.d/99-vessel.ini
 
-EXPOSE 80
+# EXPOSE 80
 
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY start-container /usr/local/bin/start-container
+# COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# COPY start-container /usr/local/bin/start-container
 RUN chmod +x /usr/local/bin/start-container
+
+RUN chsh -s /bin/zsh
+
+USER $USERNAME
+
+RUN sh -c "$(wget -O- https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+USER root
 
 ENTRYPOINT ["start-container"]
